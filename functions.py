@@ -80,11 +80,11 @@ def simulateSite(n, distMu, distSigma, dbhMu, dbhSigma, pCon, plots = False):
         #CONIFEROUS - take first nCon values
         crown[0:nCon+1] = conifCC[0:nCon+1]
         #DECIDUOUS - calculate crown diameter (using allometric equation for american elm)
-        crown[nCon+1:] = dbhs[nCon+1:]
+        crown[nCon+1:] = dbhs[nCon+1:]/100
         #crown[nCon+1:] = (1.92 + 18.30*(dbhs[nCon+1:]/100))/2
     else:
         #try just using DBH instead of overestimated canopy 
-        crown = dbhs
+        crown = dbhs/100
         #crown = (1.92 + 18.30*(dbhs/100))/2
 
     #Generate locations
