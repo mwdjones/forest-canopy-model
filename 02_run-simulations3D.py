@@ -2,16 +2,17 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import pandas as pd
-import shapely as shp
-import geopandas as gpd
+#import shapely as shp
+#import geopandas as gpd
 import math
 import random
-import scipy.stats as stats
+#import scipy.stats as stats
+import pymesh
 
 from functions import *
 
-'''PARAMETERS'''
-niters = 100
+#'''PARAMETERS'''
+niters = 50
 
 veg_data = pd.read_csv('./data/compiled_data_formodel.csv')
 

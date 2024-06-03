@@ -2,19 +2,27 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import pandas as pd
-import shapely as shp
-import geopandas as gpd
+#import shapely as shp
+#import geopandas as gpd
 import math
-from matplotlib import offsetbox
-from matplotlib.gridspec import GridSpec
+#from matplotlib import offsetbox
+#from matplotlib.gridspec import GridSpec
 import numpy as np
-import xarray as xr
-from sklearn.linear_model import LinearRegression
-from scipy.signal import find_peaks
-from scipy.stats import kendalltau
-import scipy.stats as stats
+#import xarray as xr
+#from sklearn.linear_model import LinearRegression
+#from scipy.signal import find_peaks
+#from scipy.stats import kendalltau
+#import scipy.stats as stats
+import pymesh
 
 from math import floor, log10
+
+'''Parameters'''
+ELEVATION = 1384 #feet
+LATITUDE = 47.5152344351
+LONGITUDE = -93.4706821209
+HI = ((ELEVATION - 887) / 100) * 1.0 + (LATITUDE - 39.54) * 4.0 + (-82.52-
+LONGITUDE) * 1.25
 
 '''Functions'''
 
@@ -160,6 +168,38 @@ def simulateSite(n, distMu, distSigma, dbhMu, dbhSigma, pCon, plots = False):
 
     return pcoverage, poverlap, tot
 
+def createTree(dbh, dist, con, ba, hi):
+    if con:
+        #Simulate coniferous trees as Black Spruce
+        #Calculate height
+        height_ft = 4.5 + 2136.9468*math.exp(-6.2688*math.pow(dbh, -0.2161)) #feet
+        height = height_ft*0.3048 #transform to m
+        #Calulate crown ratio
+        cr = 10*(5.540/(1 + 0.0072*ba)) + (4.200*(1 - math.exp(-0.0530*dbh)))
+        #Calculate crown
+        crown_ft = -0.8566 + 0.9693*dbh + 0.0573*cr   
+        crown = (crown_ft*0.3048)/2
+    else:
+        #Simulate deciduous trees as Red Maple
+        #Calculate height
+        height_ft = 4.5 * math.exp(4.3379 + ((-3.8214)/(dbh + 1))) #feet
+        height = height_ft*0.3048 #transform to m
+        #Calulate crown ratio
+        #cr = 10*(4.340/(1 + 0.0046*ba)) + (1.820*(1 - math.exp(-0.2740*dbh)))
+        #Calculate crown
+        #crown_ft = 2.7562 + 1.4212*dbh - 0.0143*math.pow(dbh, 2) + 0.0993*cr - 0.0276*hi 
+        #crown = crown_ft*0.3048
+        #Simply use BA as crown width
+        crown = (dbh*0.0254)/2 #in to m then to radius
+    
+    #Rotate location
+    #assume on x axis and rotate a random number of degrees
+    deg = np.random.uniform(low = 0, high = 2*math.pi)
+    xx, yy = rotate_origin_only(dist, 0, deg)
+
+    #create point
+    return pymesh.generate_cylinder((xx, yy, 0), (xx, yy, height), crown, 0, 32) 
+
 
 def simulateSite3D(n, distMu, distSigma, dbhMu, dbhSigma, pCon, plots = False):
     #Step 1: Generate site
@@ -167,49 +207,29 @@ def simulateSite3D(n, distMu, distSigma, dbhMu, dbhSigma, pCon, plots = False):
 
     #Generate distances
     dists = np.random.normal(loc = distMu, scale = distSigma, size = n)
-
     #Check all are in correct range
     while ((dists > 8).any()) | ((dists < 0).any()):
         dists = np.random.normal(loc = distMu, scale = distSigma, size = n)
 
     #Generate DBHs (in cm)
     dbhs = np.random.normal(loc = dbhMu, scale = dbhSigma, size = n)
-
     #Check all are in correct range
     while(dbhs < 0).any():
         dbhs = np.random.normal(loc = dbhMu, scale = dbhSigma, size = n)
-
-    #Generate conif crown widths 
-    conifCC = (stats.gamma.rvs(2.84604046158689, loc=-1.8990921243783796, scale=14.411867120014431, size=n))/100
-    while(conifCC < 0).any():
-        conifCC = (stats.gamma.rvs(2.84604046158689, loc=-1.8990921243783796, scale=14.411867120014431, size=n))/100
-
-    #Based on pCon, assign crown width for conif and decid trees
+    #Convert to in
+    dbhs_in = dbhs*0.3937
+    
+    #Calculate Basal Area for site (m2/hectare)
+    BA = sum(math.pi*((dbhs/2)**2))*(1/(math.pi*((26.2)**2)))*(1/0.00000929)*(0.001)
+    
+    #Based on pCon, assign conifs
     nCon = int(n*pCon)
-    crown = np.zeros(n)
-    #take first nCon trees:
-    if nCon == n:
-        #For sites with all conifers, just take all simulated crown data
-        crown = conifCC
-    elif (nCon > 0) & (nCon < n):
-        #CONIFEROUS - take first nCon values
-        crown[0:nCon+1] = conifCC[0:nCon+1]
-        #DECIDUOUS - calculate crown diameter (using allometric equation for american elm)
-        crown[nCon+1:] = (1.92 + 18.30*(dbhs[nCon+1:]/100))/2
-    else:
-        #try just using DBH instead of overestimated canopy 
-        crown = (1.92 + 18.30*(dbhs/100))/2
+    con = np.concatenate((np.zeros(nCon), np.ones(n - nCon)))
 
     #Generate locations
     trees = []
     for i in range(0, len(dists)):
-        #assume on x axis and rotate a random number of degrees
-        deg = np.random.uniform(low = 0, high = 2*math.pi)
-        xx, yy = rotate_origin_only(dists[i], 0, deg)
-
-        #create point
-        trees.append(pymesh.generate_cylinder((xx, yy, 0), (xx, yy, 18), crown[i], 0, 32)) #generally set height to 18, adjust once Salli sends allometric equations
-
+        trees.append(createTree(dbhs_in[i], dists[i], con[i], BA, HI))
 
     #Step 1.5: Calculate total tree canopy
     volumes = [tree.volume for tree in trees]
@@ -236,7 +256,6 @@ def simulateSite3D(n, distMu, distSigma, dbhMu, dbhSigma, pCon, plots = False):
     for i in range(1, len(intersects)):
         ints = pymesh.boolean(ints, intersects[i], 'union')
         
-    print(len(intersects))
     
     #Clip
     int_clipped = pymesh.boolean(ints, site, 'intersection')
@@ -254,6 +273,7 @@ def simulateSite3D(n, distMu, distSigma, dbhMu, dbhSigma, pCon, plots = False):
             y = [tree.vertices[i][1] for i in range(0, l)]
             z = [tree.vertices[i][2] for i in range(0, l)]
             ax.scatter(x,y,z, color = 'black', alpha = 0.25)
+            #ax.plot_trisurf(x, y, z, color = 'black', alpha = 0.25)
 
         #plot intersection
         l = len(ints.vertices)
@@ -262,6 +282,10 @@ def simulateSite3D(n, distMu, distSigma, dbhMu, dbhSigma, pCon, plots = False):
         z_int = [ints.vertices[i][2] for i in range(0, l)]
         ax.scatter(x_int, y_int, z_int)
         ax.plot_trisurf(x_int, y_int, z_int, alpha = 0.25)
+        
+        ax.set_ylim(-8, 8)
+        ax.set_xlim(-8, 8)
+        ax.set_zlim(0, 25)
 
     return pcoverage, poverlap, tot
 
