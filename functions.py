@@ -10,10 +10,11 @@ import math
 import numpy as np
 #import xarray as xr
 #from sklearn.linear_model import LinearRegression
-#from scipy.signal import find_peaks
-#from scipy.stats import kendalltau
-#import scipy.stats as stats
+from scipy.signal import find_peaks
+from scipy.stats import kendalltau
+import scipy.stats as stats
 import pymesh
+import itertools
 
 from math import floor, log10
 
@@ -21,8 +22,7 @@ from math import floor, log10
 ELEVATION = 1384 #feet
 LATITUDE = 47.5152344351
 LONGITUDE = -93.4706821209
-HI = ((ELEVATION - 887) / 100) * 1.0 + (LATITUDE - 39.54) * 4.0 + (-82.52-
-LONGITUDE) * 1.25
+HI = ((ELEVATION - 887) / 100) * 1.0 + (LATITUDE - 39.54) * 4.0 + (-82.52 - LONGITUDE) * 1.25
 
 '''Functions'''
 
@@ -54,6 +54,7 @@ def rotate_origin_only(x, y, radians):
 
     return xx, yy
 
+'''
 def simulateSite(n, distMu, distSigma, dbhMu, dbhSigma, pCon, plots = False):
     #Step 1: Generate site
     site = shp.Point((0, 0)).buffer(8)
@@ -167,6 +168,7 @@ def simulateSite(n, distMu, distSigma, dbhMu, dbhSigma, pCon, plots = False):
         ax2.set_title('Total Plot Overlap: ' + str(np.round(poverlap, 2)), loc = 'left', size = 'small')
 
     return pcoverage, poverlap, tot
+'''
 
 def createTree(dbh, dist, con, ba, hi):
     if con:
@@ -198,7 +200,7 @@ def createTree(dbh, dist, con, ba, hi):
     xx, yy = rotate_origin_only(dist, 0, deg)
 
     #create point
-    return pymesh.generate_cylinder((xx, yy, 0), (xx, yy, height), crown, 0, 32) 
+    return pymesh.generate_cylinder((xx, yy, 0), (xx, yy, height), crown, 0, 12) 
 
 
 def simulateSite3D(n, distMu, distSigma, dbhMu, dbhSigma, pCon, plots = False):
@@ -246,19 +248,23 @@ def simulateSite3D(n, distMu, distSigma, dbhMu, dbhSigma, pCon, plots = False):
 
     #Step 3: Calculate total overlap
     #Collect intersections recursively
-    intersects = []
-    for i in range(len(trees)):
-        for j in range(i):
-            intersects.append(pymesh.boolean(trees[i], trees[j], 'intersection'))
+    #intersects = []
+    #for i in range(len(trees)):
+    #    for j in range(i):
+    #        intersects.append(pymesh.boolean(trees[i], trees[j], 'intersection'))
 
     #merge
-    ints = intersects[0]
-    for i in range(1, len(intersects)):
-        ints = pymesh.boolean(ints, intersects[i], 'union')
-        
+    #ints = intersects[0]
+    #for i in range(1, len(intersects)):
+    #    ints = pymesh.boolean(ints, intersects[i], 'union')
+    treeComb = itertools.combinations(trees, 2)
+    intersects = [pymesh.boolean(i, j, 'intersection') for (i, j) in treeComb]
+
+    #merge
+    ints = pymesh.CSGTree({"union": [{"mesh": mesh} for mesh in intersects]})    
     
     #Clip
-    int_clipped = pymesh.boolean(ints, site, 'intersection')
+    int_clipped = pymesh.boolean(ints.mesh, site, 'intersection')
     poverlap = float(int_clipped.volume/site.volume)
 
     #Step 4: Plot
@@ -285,10 +291,11 @@ def simulateSite3D(n, distMu, distSigma, dbhMu, dbhSigma, pCon, plots = False):
         
         ax.set_ylim(-8, 8)
         ax.set_xlim(-8, 8)
-        ax.set_zlim(0, 25)
+    #ax.set_zlim(0, 25)
 
     return pcoverage, poverlap, tot
 
+'''
 #Model Assumption Validation Functions
 def calculate_residuals(model, features, label):
     """
@@ -393,3 +400,4 @@ def homoscedasticity_assumption(model, features, label):
     ax.spines['top'].set_visible(False)  # Removing the top spine
     plt.title('Residuals')
     plt.show()  
+'''
