@@ -63,7 +63,7 @@ for index, row in veg_data.iterrows():
                         'pCoverage' : pcov,
                         'totalArea' : total})
     
-    dat.to_csv('./modeloutput/test-simulation-noDecidCanopy-site-' + str(site) + '-' + str(syear) + '.csv')
+    dat.to_csv('./modeloutput/test-simulation-noDecidCanopy-allometric-site-' + str(site) + '-' + str(syear) + '.csv')
 
 
 
